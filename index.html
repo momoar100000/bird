@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>shah hossini Game</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: lightgray;
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            margin: auto;
+            border: 2px solid black;
+            touch-action: none;
+        }
+        #restartButton {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>shah hossin Game</h1>
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+    <button id="restartButton" onclick="restartGame()">⟳</button>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const restartButton = document.getElementById("restartButton");
+
+        let bird, pipes, frame, score, highScore, gameOver, explosionParticles;
+        let pipeWidth = 60;
+        let pipeGap = 170;
+        let speed = 3.5;
+        let birdCrashed = false;
+
+        const backgroundImage = new Image();
+        const birdImage = new Image();
+
+        backgroundImage.src = "https://i.postimg.cc/zvG04rj6/Picsart-25-02-01-18-27-17-705.jpg";
+        birdImage.src = "https://i.postimg.cc/wxXRTGw1/Picsart-25-02-01-16-55-26-630.png"; // تصویر جدید پرنده
+
+        // Load the jump sound
+        const jumpSound = new Audio("https://file.mediabaz.net/sound%20effect/transition/MediaBaz.net-Live%20-%2001.mp3");
+        
+        // Load the collision sound (when bird hits pipes, top, or bottom)
+        const collisionSound = new Audio("https://file.mediabaz.net/sound%20effect/transition/MediaBaz.net-Game%20-%2001.mp3");
+
+        birdImage.onload = () => {
+            initGame();
+        };
+
+        function initGame() {
+            bird = { 
+                x: 100, 
+                y: 225, 
+                width: 90,  
+                height: 110, 
+                velocity: 0, 
+                gravity: 0.15,  
+                lift: -3.5 
+            };
+
+            pipes = [];
+            explosionParticles = [];
+            frame = 0;
+            score = 0;
+            highScore = localStorage.getItem("highScore") || 0; // Load high score
+            gameOver = false;
+            birdCrashed = false;
+
+            restartButton.style.display = "none";
+            gameLoop();
+        }
+
+        function drawBackground() {
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        }
+
+        function drawBird() {
+            if (!birdCrashed) {
+                ctx.drawImage(birdImage, bird.x, bird.y, bird.width, bird.height);
+            }
+        }
+
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                let gradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + pipeWidth, 0);
+                gradient.addColorStop(0, "#006400");
+                gradient.addColorStop(1, "#00FF00");
+                ctx.fillStyle = gradient;
+                ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+                ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
+            });
+        }
+
+        function updatePipes() {
+            if (frame % 120 === 0) {
+                let topHeight = Math.random() * (canvas.height / 2);
+                let pipeX = canvas.width;
+                pipes.push({ x: pipeX, top: topHeight, bottom: topHeight + pipeGap });
+            }
+
+            pipes.forEach(pipe => {
+                pipe.x -= speed;
+                if (pipe.x + pipeWidth < 0) {
+                    pipes.shift();
+                    score++;
+                    if (score > highScore) {
+                        highScore = score;
+                        localStorage.setItem("highScore", highScore); // Save high score
+                    }
+                }
+
+                // Check for collision with pipes
+                if (!birdCrashed &&
+                    bird.x + bird.width > pipe.x && 
+                    bird.x < pipe.x + pipeWidth && 
+                    (bird.y < pipe.top || bird.y + bird.height > pipe.bottom)) {
+                    createExplosion();
+                    collisionSound.play(); // Play collision sound when bird hits pipe
+                }
+            });
+        }
+
+        function updateBird() {
+            if (!birdCrashed) {
+                bird.velocity += bird.gravity;
+                bird.y += bird.velocity;
+
+                if (bird.y < 0 || bird.y + bird.height > canvas.height) {
+                    createExplosion();
+                    collisionSound.play(); // Play collision sound if bird hits top or bottom
+                }
+            }
+        }
+
+        function drawScore() {
+            ctx.font = "bold 24px Arial";
+            ctx.fillStyle = "black";
+            ctx.fillText("Score: " + score, 20, 40);
+            ctx.fillText("High Score: " + highScore, 20, 70);
+        }
+
+        function createExplosion() {
+            birdCrashed = true;
+            gameOver = true;
+
+            for (let i = 0; i < 20; i++) {
+                explosionParticles.push({
+                    x: bird.x + bird.width / 2,
+                    y: bird.y + bird.height / 2,
+                    size: Math.random() * 8 + 4,
+                    speedX: (Math.random() - 0.5) * 5,
+                    speedY: (Math.random() - 0.5) * 5,
+                    color: `rgb(${Math.random() * 255}, 0, 0)`,
+                    life: Math.random() * 30 + 20
+                });
+            }
+
+            setTimeout(() => {
+                restartButton.style.display = "block";
+            }, 1000);
+        }
+
+        function updateExplosion() {
+            explosionParticles.forEach((particle, index) => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.life--;
+
+                if (particle.life <= 0) {
+                    explosionParticles.splice(index, 1);
+                }
+            });
+        }
+
+        function drawExplosion() {
+            explosionParticles.forEach(particle => {
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function gameLoop() {
+            if (gameOver && explosionParticles.length === 0) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            updateBird();
+            updatePipes();
+            updateExplosion();
+            drawPipes();
+            drawExplosion();
+            drawBird();
+            drawScore();
+
+            frame++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Play the jump sound when clicking on the canvas
+        document.addEventListener("click", () => {
+            if (!gameOver) {
+                bird.velocity = bird.lift;
+                jumpSound.currentTime = 0; // Restart the jump sound if it was playing
+                jumpSound.play(); // Play the new jump sound
+            }
+        });
+
+        function restartGame() {
+            initGame();
+        }
+    </script>
+</body>
+</html>
